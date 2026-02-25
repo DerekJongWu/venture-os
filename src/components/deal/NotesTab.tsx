@@ -7,80 +7,49 @@ interface Props {
   deal: DealWithArrays;
 }
 
-/** Parse the Outline doc ID from a Lighthouse URL (last path segment). */
-function parseDocIdFromUrl(url: string): string | null {
-  try {
-    const parts = new URL(url).pathname.split("/").filter(Boolean);
-    return parts[parts.length - 1] ?? null;
-  } catch {
-    return null;
-  }
-}
-
 export function NotesTab({ deal }: Props) {
-  const [docId, setDocId] = useState<string | null>(
-    deal.outline_doc_id ?? null
-  );
+  const [documentId, setDocumentId] = useState<string | null>(null);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Track the last content successfully saved so we skip no-op writes.
   const [savedContent, setSavedContent] = useState("");
 
-  // ─── Step 1: if outline_doc_id is missing but lighthouse_url exists,
-  //     parse it, persist it to the DB, then set local state. ────────────────
+  // Fetch notes by company name: search_documents(companyName) → read_document(docId).
+  // API returns { content, documentId }; we store documentId for save.
   useEffect(() => {
-    if (docId) return;
-    if (!deal.lighthouse_url) return;
-
-    const parsed = parseDocIdFromUrl(deal.lighthouse_url);
-    if (!parsed) return;
-
-    // Fire-and-forget PATCH — the deal page will refresh on next open.
-    fetch(`/api/deals/${deal.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ outline_doc_id: parsed }),
-    }).catch(() => {
-      /* non-fatal — doc still loads even if the PATCH fails */
-    });
-
-    setDocId(parsed);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ─── Step 2: fetch document content whenever docId is resolved ───────────
-  useEffect(() => {
-    if (!docId) return;
+    const companyName = deal.company_name?.trim();
+    if (!companyName) return;
 
     setLoading(true);
     setError(null);
 
-    fetch(`/api/lighthouse/document?docId=${encodeURIComponent(docId)}`)
+    fetch(
+      `/api/lighthouse/document?companyName=${encodeURIComponent(companyName)}`
+    )
       .then(async (r) => {
         const body = await r.json().catch(() => ({}));
         if (!r.ok) {
           const msg = (body as { error?: string }).error ?? `HTTP ${r.status}`;
           throw new Error(msg);
         }
-        return body as { content: string };
+        return body as { content: string; documentId: string };
       })
-      .then(({ content: fetched }) => {
+      .then(({ content: fetched, documentId: docId }) => {
         setContent(fetched ?? "");
         setSavedContent(fetched ?? "");
+        setDocumentId(docId ?? null);
         setIsDirty(false);
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [docId]);
+  }, [deal.company_name]);
 
-  // ─── Save ─────────────────────────────────────────────────────────────────
   const save = useCallback(
     async (text: string) => {
-      if (!docId) return;
+      if (!documentId) return;
       if (text === savedContent) return;
 
       setSaving(true);
@@ -88,7 +57,7 @@ export function NotesTab({ deal }: Props) {
         const r = await fetch("/api/lighthouse/document", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ docId, content: text }),
+          body: JSON.stringify({ docId: documentId, content: text }),
         });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         setSavedContent(text);
@@ -99,7 +68,7 @@ export function NotesTab({ deal }: Props) {
         setSaving(false);
       }
     },
-    [docId, savedContent]
+    [documentId, savedContent]
   );
 
   function handleChange(value: string) {
@@ -107,13 +76,11 @@ export function NotesTab({ deal }: Props) {
     setIsDirty(value !== savedContent);
   }
 
-  // ─── Empty state — no Lighthouse doc linked ───────────────────────────────
-  if (!deal.lighthouse_url && !deal.outline_doc_id) {
+  if (!deal.company_name?.trim()) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center px-6">
         <p className="text-sm text-gray-500">
-          No Lighthouse document linked. Add a Lighthouse URL to this deal in
-          Attio to enable notes sync.
+          Company name is required to load notes from Lighthouse.
         </p>
       </div>
     );
@@ -147,7 +114,7 @@ export function NotesTab({ deal }: Props) {
           )}
           <button
             onClick={() => save(content)}
-            disabled={saving || !isDirty}
+            disabled={saving || !isDirty || !documentId}
             className="text-xs px-2.5 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
           >
             {saving ? "Saving…" : "Save to Lighthouse"}

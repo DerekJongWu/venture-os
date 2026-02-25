@@ -1,12 +1,13 @@
 // ─── Lighthouse (Outline) sync helpers ───────────────────────────────────────
 //
-// fetchDocument(docId)        Fetch full markdown content of an Outline doc.
-// updateDocument(docId, text) Overwrite full content of an Outline doc.
-// appendToDocument(docId, md) Append a markdown block to the end of a doc.
-// searchDocuments(query)      Search Lighthouse; return lightweight doc stubs.
+// Compatible with Vortiago mcp-outline and fan-wen fork (SSE + header auth):
+// https://github.com/Vortiago/mcp-outline  https://github.com/fan-wen/mcp-outline
+// Tool names: read_document(document_id), update_document(…), search_documents(query).
 //
-// All calls go through the self-hosted Outline MCP server at
-// process.env.OUTLINE_MCP_ENDPOINT, authenticated with OUTLINE_API_TOKEN.
+// All MCP calls use header auth: Authorization: Bearer <OUTLINE_API_TOKEN>.
+// - If OUTLINE_MCP_ENDPOINT is .../sse (SSE transport), we POST to .../messages.
+// - If you use Streamable HTTP with .../mcp, set endpoint to .../mcp or set
+//   OUTLINE_MCP_POST_PATH=mcp to force POST path.
 //
 // The app never creates Outline documents — docs originate externally.
 
@@ -21,15 +22,44 @@ export interface OutlineDocStub {
 let _callId = 0;
 
 /**
+ * Resolve the URL we use for POST (JSON-RPC tools/call).
+ * - fan-wen / Vortiago with MCP_TRANSPORT=sse: GET /sse, POST /messages. We POST to /messages.
+ * - Streamable HTTP: POST to /mcp. Set OUTLINE_MCP_ENDPOINT to .../mcp or OUTLINE_MCP_POST_PATH=mcp.
+ * - Optional: OUTLINE_MCP_POST_PATH=messages or mcp to force the path (overrides /sse → /messages).
+ */
+function getMCPPostEndpoint(): string {
+  const endpoint = process.env.OUTLINE_MCP_ENDPOINT?.trim();
+  if (!endpoint) throw new Error("OUTLINE_MCP_ENDPOINT not configured");
+  const forcePath = process.env.OUTLINE_MCP_POST_PATH?.trim().toLowerCase();
+  try {
+    const u = new URL(endpoint);
+    if (forcePath === "mcp" || forcePath === "messages") {
+      u.pathname = `/${forcePath}`;
+      return u.toString();
+    }
+    if (u.pathname === "/sse") {
+      u.pathname = "/messages";
+      return u.toString();
+    }
+    return endpoint;
+  } catch {
+    return endpoint;
+  }
+}
+
+/**
  * Send a JSON-RPC 2.0 tools/call request to the Outline MCP server.
+ * All requests use header auth: Authorization: Bearer <OUTLINE_API_TOKEN>.
+ * POST target is derived from OUTLINE_MCP_ENDPOINT (e.g. .../sse → .../messages for SSE).
  * Returns the concatenated text from the response content blocks.
  */
 async function callMCP(
   toolName: string,
   args: Record<string, unknown>
 ): Promise<string> {
-  const endpoint = process.env.OUTLINE_MCP_ENDPOINT;
-  if (!endpoint) throw new Error("OUTLINE_MCP_ENDPOINT not configured");
+  const endpoint = getMCPPostEndpoint();
+  const token = process.env.OUTLINE_API_TOKEN;
+  if (!token) throw new Error("OUTLINE_API_TOKEN not configured");
 
   const id = ++_callId;
 
@@ -37,7 +67,7 @@ async function callMCP(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OUTLINE_API_TOKEN}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
       jsonrpc: "2.0",
@@ -84,6 +114,27 @@ async function callMCP(
  */
 export async function fetchDocument(docId: string): Promise<string> {
   return callMCP("read_document", { document_id: docId });
+}
+
+/**
+ * Fetch document content by company name: search_documents(companyName) → get doc ID → read_document(docId).
+ * Returns content and documentId (so the client can use documentId for save).
+ * Throws if no document is found for the company.
+ */
+export async function fetchDocumentByCompanyName(
+  companyName: string
+): Promise<{ content: string; documentId: string }> {
+  const trimmed = companyName?.trim();
+  if (!trimmed) throw new Error("Company name is required");
+
+  const stubs = await searchDocuments(trimmed);
+  if (!stubs.length) {
+    throw new Error(`No document found in Lighthouse for "${trimmed}"`);
+  }
+
+  const documentId = stubs[0].id;
+  const content = await fetchDocument(documentId);
+  return { content, documentId };
 }
 
 /**
