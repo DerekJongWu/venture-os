@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Deal {
+  id                      String    @id @default(cuid())
+
+  // Core identity
+  company_name            String
+  attio_record_id         String?   @unique  // companies object record ID
+  attio_entry_id          String?   @unique  // pipeline list entry ID
+
+  // Attio Pipeline fields
+  status                  String?   // full Attio status value (all 15 options)
+  funnel                  String?
+  fund                    String    @default("[]") // JSON: string[]
+  linkedin_founder        String?
+  dd_lead                 String    @default("[]") // JSON: workspace member emails
+  deal_support            String    @default("[]") // JSON: workspace member emails
+  thesis                  String    @default("[]") // JSON: string[]
+  lighthouse_url          String?   // READ-ONLY, always sourced from Attio
+  source                  String?
+  description             String?
+  next_steps              String?
+  pass_rationale          String    @default("[]") // JSON: string[]
+  pass_rationale_detail   String?
+  investment_amount_smbc  Float?
+  sourced                 Boolean   @default(false)
+
+  // Lighthouse / Outline
+  outline_doc_id          String?   // parsed from lighthouse_url on ingest
+
+  // Harmonic enrichment (cached locally)
+  harmonic_id             String?
+  employee_count          Int?
+  total_funding           Float?
+  last_funding_stage      String?
+  last_funding_date       DateTime?
+  headcount_growth_6m     Float?
+  harmonic_enriched_at    DateTime?
+
+  // Sync state
+  missing_in_attio        Boolean   @default(false)
+
+  // Relations
+  notes                   Note[]
+  transcripts             Transcript[]
+  dataroom_files          DataRoomFile[]
+
+  last_synced_at          DateTime?
+  created_at              DateTime  @default(now())
+  updated_at              DateTime  @updatedAt
+}
+
+model Note {
+  id             String   @id @default(cuid())
+  deal_id        String
+  deal           Deal     @relation(fields: [deal_id], references: [id])
+  content        String   // markdown
+  type           String   // "meeting" | "call" | "general" | "memo" | "transcript_summary"
+  outline_doc_id String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+}
+
+model Transcript {
+  id          String   @id @default(cuid())
+  deal_id     String
+  deal        Deal     @relation(fields: [deal_id], references: [id])
+  raw_text    String
+  processed   Boolean  @default(false)
+  summary     String?
+  created_at  DateTime @default(now())
+}
+
+model DataRoomFile {
+  id             String   @id @default(cuid())
+  deal_id        String
+  deal           Deal     @relation(fields: [deal_id], references: [id])
+  file_name      String
+  file_path      String   // /data/dataroom/{deal_id}/{filename}
+  file_type      String   // "pdf" | "docx" | "xlsx" | "other"
+  extracted_text String?
+  uploaded_at    DateTime @default(now())
+}
+
+model SyncLog {
+  id          String   @id @default(cuid())
+  entity_type String   // "deal"
+  entity_id   String
+  direction   String   // "push" | "pull"
+  source      String   // "attio" | "lighthouse" | "harmonic"
+  status      String   // "success" | "error"
+  error       String?
+  synced_at   DateTime @default(now())
+}
