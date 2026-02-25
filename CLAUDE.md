@@ -18,8 +18,8 @@ Harmonic is used for company enrichment. Runs locally with a SQLite database.
 
 ## Environment Variables
 ATTIO_API_KEY=
-OUTLINE_API_TOKEN=
-OUTLINE_MCP_ENDPOINT=        # your AWS-hosted MCP server URL
+OUTLINE_API_TOKEN=           # Bearer token for the MCP server (Authorization header)
+OUTLINE_MCP_ENDPOINT=        # MCP server SSE URL, e.g. https://mcp-notes.lighthouse.ai/sse
 ANTHROPIC_API_KEY=
 HARMONIC_API_KEY=
 DATABASE_URL="file:./dev.db"
@@ -235,13 +235,31 @@ back out. The local DB controls which deals are tracked.
 ### Lighthouse (Outline) Sync
 - The app never creates Outline documents. Docs are created by the team
   directly in Lighthouse.
-- outline_doc_id is parsed from lighthouse_url when the Attio record is 
+- outline_doc_id is parsed from lighthouse_url when the Attio record is
   first pulled and stored locally for subsequent API calls.
 - On deal detail open: fetch live Outline doc content via fetchDocument using
   outline_doc_id. Always fetch live, do not serve from local cache.
 - On note/content edit in the app: call updateDocument or appendToDocument
   on the Outline MCP immediately.
-- MCP endpoint: process.env.OUTLINE_MCP_ENDPOINT
+- MCP endpoint: process.env.OUTLINE_MCP_ENDPOINT (SSE URL ending in /sse)
+
+#### MCP Transport (fan-wen/mcp-outline, SSE mode)
+The server uses SSE transport. Each callMCP() call opens a fresh session:
+  1. GET /sse with Authorization header → server sends endpoint event with session URL
+  2. POST /messages/?session_id=<id> — initialize (wait for response on SSE stream)
+  3. POST /messages/?session_id=<id> — notifications/initialized (fire-and-forget)
+  4. POST /messages/?session_id=<id> — tools/call (wait for response on SSE stream)
+
+IMPORTANT: Use Node.js https.request() for the SSE stream, NOT fetch(). Next.js
+App Router's patched fetch buffers streaming responses and causes reader.read()
+to hang indefinitely on SSE connections. https.request() streams data correctly.
+
+#### MCP Tool Names and Response Formats
+- search_documents({ query }) → returns markdown text, NOT JSON.
+  Format: "## 1. Title\nID: <uuid>\nContext: ..."
+  Parsed in searchDocuments() by splitting on "## N." section headers.
+- read_document({ document_id }) → returns full markdown content as plain text.
+- update_document({ document_id, text, append? }) → no meaningful return value.
 
 ### Harmonic Enrichment
 - Read-only. Enrich by company domain or name.
@@ -317,7 +335,7 @@ All AI prompts receive a dealContext object:
 Phase 1: ✅ Scaffold + Prisma schema + DB migrations
 Phase 2: ✅ Pipeline UI (table + kanban views + Add Deal flow)
 Phase 3: 🔲 Attio two-way sync
-Phase 4: 🔲 Lighthouse (Outline) sync
+Phase 4: ✅ Lighthouse (Outline) sync — Notes tab live (search + read + write)
 Phase 5: 🔲 AI features
 Phase 6: 🔲 Data room
 Phase 7: 🔲 Harmonic enrichment
@@ -328,7 +346,12 @@ Phase 8: 🔲 Background jobs + settings + PDF export
 
 ## Decisions Log
 - 2026-02-24: App never creates records in Attio or Lighthouse. External creation only.
-- 2026-02-24: Local DB controls which deals are tracked (Option A). New Attio 
+- 2026-02-24: Local DB controls which deals are tracked (Option A). New Attio
   records do not auto-appear locally — must be added via Add Deal search flow.
 - 2026-02-24: lighthouse_url is read-only in app, always sourced from Attio.
 - 2026-02-24: Attio pull is local-driven — only fetches entry_ids already in local DB.
+- 2026-02-25: Lighthouse MCP uses SSE transport (fan-wen/mcp-outline). Requires
+  initialize handshake before tools/call. Use https.request() not fetch() for the
+  SSE stream — Next.js App Router patches fetch and buffers streaming responses.
+- 2026-02-25: search_documents returns markdown text, not JSON. Parse by splitting
+  on "## N." section headers to extract document IDs and titles.
