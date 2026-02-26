@@ -50,16 +50,20 @@ export async function POST(req: NextRequest) {
       ? ctx.transcriptSummaries.map(flattenTranscript).join("\n\n---\n\n")
       : "No processed transcripts available.";
 
-  const userPrompt = `You are editing an existing deal note. The note is in <document> tags below.
+  const userPrompt = `You are enriching an existing deal note with information from meeting transcripts. The note already has a fixed template structure. Your output must preserve that structure exactly and only add or rephrase bullets inside it.
 
-Your job: return an updated version of that exact document with relevant facts from the meeting transcripts woven in. The document's section structure is the ground truth — do not change it.
+CRITICAL — PRESERVE STRUCTURE:
+- The document in <document> is the single source of truth for structure. It typically has: company info at the top (name, Company link, Owner(s), Thesis Statement, Socials, HQ, Founded, etc.), then sections under ### headings (e.g. ### Team, ### Business Description, ### Problem, ### Product, ### Market dynamics, ### GTM strategy, ### Business model/pricing, ### Customers and early traction, ### Financing history).
+- Your output MUST contain every heading, every line of the top company block, and every ### section that appears in <document>, in the exact same order. Copy any section verbatim if the transcript has nothing to add; do not drop, rename, or reorder sections.
+- Do NOT introduce new section headings that are not in <document>. The labels in <transcripts> like [Product] and [Traction] are only categories — map that content into the document's existing sections by topic (e.g. [Traction] into ### Customers and early traction or ### Business Description), and do not output those labels as headings.
 
-RULES:
-1. Output only the revised document. No preamble, no explanation, no XML tags.
-2. Every section heading in <document> must appear in your output, in the same order. Do not rename, add, or remove sections.
-3. Within each section, update or add bullet points using information from the transcripts. If a section has nothing new, copy it unchanged.
-4. The labels in <transcripts> like [Product] and [Traction] are data categories extracted from the meeting — they are not section headings and must NOT appear in your output.
-5. Append a new section at the end only if the transcript contains important information with no corresponding section in the document.
+YOUR ONLY CHANGES:
+- Top block: Keep the same layout and fields. You may fill in or rephrase placeholder bullets (e.g. Thesis Statement) using transcript info; leave empty fields and structure unchanged.
+- Under each ### section: Only add new bullet points and/or rephrase existing bullets using transcript information. Keep bullet format ("- " or "* "). Do not remove bullets, turn sections into paragraphs, or replace a section with different structure.
+- If a section has no relevant transcript content, output it exactly as in <document>.
+
+OUTPUT FORMAT:
+- Output only the full revised markdown document. No preamble, no explanation, no \`\`\` fences, no XML tags. Start with the document content (e.g. company name at top) and end with the last section.
 
 <document>
 ${ctx.lighthouseContent}

@@ -309,12 +309,33 @@ async function callMCP(
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+/** Outline expects document_id to be a UUID or a slug (e.g. doc URL path segment). Reject URLs and malformed values. */
+export function isValidOutlineDocId(id: string | null | undefined): boolean {
+  if (!id || typeof id !== "string") return false;
+  const t = id.trim();
+  if (!t) return false;
+  // UUID (with optional hyphens)
+  if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(t)) return true;
+  // Slug: alphanumeric and hyphens only, no spaces/slashes (avoids URL path or full URL)
+  if (/^[a-zA-Z0-9_-]+$/.test(t) && t.length >= 2 && t.length <= 200) return true;
+  return false;
+}
+
 /**
  * Fetch the full markdown content of an Outline document by ID.
  * Always fetches live — never served from local cache.
+ * Throws if docId is not a valid UUID or slug (Outline returns 400 otherwise).
  */
 export async function fetchDocument(docId: string): Promise<string> {
-  return callMCP("read_document", { document_id: docId });
+  if (!isValidOutlineDocId(docId)) {
+    throw new Error(`Invalid document ID for Outline (expected UUID or slug): ${docId.slice(0, 50)}`);
+  }
+  const raw = await callMCP("read_document", { document_id: docId });
+  // MCP may return error payload as plain text instead of throwing
+  if (raw && (raw.trimStart().startsWith('{"ok":false') || /^HTTP [45]\d/.test(raw.trimStart()))) {
+    throw new Error(raw.slice(0, 200));
+  }
+  return raw;
 }
 
 /**
@@ -384,6 +405,9 @@ export async function updateDocument(
   docId: string,
   content: string
 ): Promise<void> {
+  if (!isValidOutlineDocId(docId)) {
+    throw new Error(`Invalid document ID for Outline (expected UUID or slug): ${String(docId).slice(0, 50)}`);
+  }
   await callMCP("update_document", { document_id: docId, text: content });
 }
 
@@ -395,6 +419,9 @@ export async function appendToDocument(
   docId: string,
   block: string
 ): Promise<void> {
+  if (!isValidOutlineDocId(docId)) {
+    throw new Error(`Invalid document ID for Outline (expected UUID or slug): ${String(docId).slice(0, 50)}`);
+  }
   const trimmed = block.trim();
   if (!trimmed) return;
   try {

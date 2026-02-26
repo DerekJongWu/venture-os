@@ -3,7 +3,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
 import { parseDealArrays } from "@/lib/deal-utils";
-import { fetchDocument, fetchDocumentByCompanyName } from "@/lib/sync/lighthouse";
+import {
+  fetchDocument,
+  fetchDocumentByCompanyName,
+  isValidOutlineDocId,
+} from "@/lib/sync/lighthouse";
 
 export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -30,34 +34,29 @@ export async function buildDealContext(dealId: string): Promise<DealContext> {
 
   let lighthouseContent = "";
 
-  // Try direct fetch by stored doc ID first; fall back to search by company name
-  // (same strategy as the Notes tab) if the stored ID is missing, stale, or rejected.
-  if (deal.outline_doc_id) {
-    try {
-      const raw = await fetchDocument(deal.outline_doc_id);
-      // The MCP may forward Outline API errors as plain text instead of throwing.
-      // Treat any response that looks like an error payload as a failed fetch.
-      if (raw && !raw.trimStart().startsWith('{"ok":false') && !/^HTTP [45]/.test(raw.trimStart())) {
-        lighthouseContent = raw;
-      }
-    } catch {
-      // fetchDocument threw — fall through to company-name fallback
-    }
-  }
-
-  if (!lighthouseContent && deal.company_name) {
+  // Prefer fetch by company name so we use the document ID returned by search (Outline accepts that).
+  // Stored outline_doc_id is often parsed from the doc URL and may not be a valid UUID/slug for the API.
+  if (deal.company_name?.trim()) {
     try {
       const { content, documentId } = await fetchDocumentByCompanyName(deal.company_name);
       lighthouseContent = content;
-      // Self-heal: persist the correct doc ID so future calls don't need the fallback.
       if (documentId && documentId !== deal.outline_doc_id) {
         prisma.deal.update({
           where: { id: deal.id },
           data: { outline_doc_id: documentId },
-        }).catch(() => {}); // fire-and-forget
+        }).catch(() => {}); // self-heal stored id
       }
     } catch {
-      lighthouseContent = "";
+      // Fall back to stored outline_doc_id only if valid (UUID or slug)
+    }
+  }
+
+  if (!lighthouseContent && deal.outline_doc_id && isValidOutlineDocId(deal.outline_doc_id)) {
+    try {
+      const raw = await fetchDocument(deal.outline_doc_id);
+      if (raw?.trim()) lighthouseContent = raw;
+    } catch {
+      // keep lighthouseContent empty
     }
   }
 
