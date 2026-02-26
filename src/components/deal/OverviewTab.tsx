@@ -13,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { X, ExternalLink, RefreshCw, Upload } from "lucide-react";
+import { X, ExternalLink, RefreshCw, Upload, ChevronDown, ChevronUp, Sparkles, AlertTriangle } from "lucide-react";
 import {
   ALL_STATUSES,
   FUNNEL_OPTIONS,
@@ -209,6 +209,11 @@ export function OverviewTab({
           }
         />
       </section>
+
+      <Separator />
+
+      {/* Analyze Deal */}
+      <AnalyzeDealPanel dealId={deal.id} />
     </div>
   );
 }
@@ -518,3 +523,75 @@ function ReadOnlyField({
   );
 }
 
+
+// ─── Analyze Deal panel ───────────────────────────────────────────────────────
+
+function AnalyzeDealPanel({ dealId }: { dealId: string }) {
+  const [open, setOpen] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [output, setOutput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleAnalyze() {
+    setRunning(true);
+    setOutput("");
+    setError(null);
+    setOpen(true);
+    try {
+      const res = await fetch("/api/ai/analyze-deal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dealId }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        setOutput((prev) => prev + decoder.decode(value, { stream: true }));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Analysis failed");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleAnalyze}
+          disabled={running}
+          className="gap-1.5"
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          {running ? "Analyzing…" : "Analyze Deal"}
+        </Button>
+        {output && (
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"
+          >
+            {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            {open ? "Collapse" : "Expand"}
+          </button>
+        )}
+      </div>
+      {error && (
+        <p className="text-xs text-red-500 flex items-center gap-1">
+          <AlertTriangle size={12} /> {error}
+        </p>
+      )}
+      {open && output && (
+        <pre className="whitespace-pre-wrap text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-4 font-sans leading-relaxed">
+          {output}
+          {running && <span className="animate-pulse">▌</span>}
+        </pre>
+      )}
+    </section>
+  );
+}

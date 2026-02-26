@@ -22,7 +22,7 @@ OUTLINE_API_TOKEN=           # Bearer token for the MCP server (Authorization he
 OUTLINE_MCP_ENDPOINT=        # MCP server SSE URL, e.g. https://mcp-notes.lighthouse.ai/sse
 ANTHROPIC_API_KEY=
 HARMONIC_API_KEY=
-DATABASE_URL="file:./dev.db"
+DATABASE_URL="file:./prisma/dev.db"   # active DB is at prisma/dev.db (project root-relative)
 
 ---
 
@@ -121,7 +121,12 @@ model Deal {
   last_funding_stage      String?
   last_funding_date       DateTime?
   headcount_growth_6m     Float?
+  harmonic_competitors    String?   // JSON: [{id,name,domain}]
+  harmonic_investors      String?   // JSON: [{id,name}]
   harmonic_enriched_at    DateTime?
+
+  // Sync state
+  missing_in_attio        Boolean   @default(false)
 
   // Relations
   notes                   Note[]
@@ -262,11 +267,48 @@ to hang indefinitely on SSE connections. https.request() streams data correctly.
 - update_document({ document_id, text, append? }) → no meaningful return value.
 
 ### Harmonic Enrichment
-- Read-only. Enrich by company domain or name.
+- Read-only. Enrich by company domain (preferred) or company name (fallback).
 - Cache results locally on the Deal record.
-- Re-enrich manually via button on deal detail, or weekly via cron.
-- Fields to pull: employee_count, total_funding, last_funding_stage,
-  last_funding_date, headcount_growth_6m
+- Re-enrich manually via "Re-enrich" button on the Harmonic tab.
+- Fields pulled: employee_count, total_funding, last_funding_stage,
+  last_funding_date, headcount_growth_6m, harmonic_competitors (top 5),
+  harmonic_investors (from funding.investors)
+
+#### Harmonic API (api.harmonic.ai) — confirmed endpoint shapes
+- Lookup by domain: POST /companies?website_url=https://{domain}
+  → returns single company object directly (NOT an array)
+- Lookup by name: GET /search/typeahead?query={name}&search_type=COMPANY
+  → { results: [{ entity_urn, text }] } → take first URN
+- Batch fetch by URN: GET /companies?urns={urn}&urns={urn}...
+  → array of company objects
+- Similar companies: GET /search/similar_companies/{entity_urn}
+  → { results: [urns...] } (IDs only, then batch-fetch for names/domains)
+- Auth header: { apikey: HARMONIC_API_KEY }
+
+#### Harmonic field mappings (company object)
+| Local field           | Harmonic path                                          |
+|-----------------------|--------------------------------------------------------|
+| harmonic_id           | entity_urn                                             |
+| employee_count        | headcount                                              |
+| total_funding         | funding.funding_total                                  |
+| last_funding_stage    | funding.last_funding_type (fallback: funding.funding_stage) |
+| last_funding_date     | funding.last_funding_at                                |
+| headcount_growth_6m   | traction_metrics.headcount['180d_ago'].percent_change ÷ 100 |
+| harmonic_competitors  | /search/similar_companies → batch GET → [{id,name,domain}] |
+| harmonic_investors    | funding.investors → [{entity_urn,name}]                |
+
+#### Harmonic web app URL
+https://console.harmonic.ai/dashboard/company/{numeric_id}
+where numeric_id = entity_urn.split(':').pop()  (e.g. "urn:harmonic:company:1841249" → "1841249")
+
+#### Database path quirk
+Running `prisma migrate dev` from inside the prisma/ directory creates a stray
+prisma/prisma/dev.db. The active database is always prisma/dev.db (resolved
+from project root). If Prisma CLI creates a new DB instead of migrating the
+existing one, use `sqlite3 prisma/dev.db "ALTER TABLE Deal ADD COLUMN ..."` to
+patch the active DB directly, then run `prisma generate` to regenerate the client.
+After schema/client changes, restart the Next.js dev server — the globalThis.prisma
+singleton does not pick up regenerated clients via HMR alone.
 
 ---
 
@@ -319,15 +361,17 @@ All AI prompts receive a dealContext object:
 ## Tech Stack
 - Next.js 14 App Router + TypeScript
 - Tailwind CSS + shadcn/ui
-- Prisma + SQLite (file:./dev.db)
+- Prisma + SQLite (file:./prisma/dev.db)
 - Anthropic SDK (streaming, claude-sonnet-4-6)
 - @dnd-kit/core (kanban drag and drop)
+- TipTap v3 (rich text editor for Notes tab — same foundation as Outline)
+- tiptap-markdown (markdown ↔ TipTap document serialization)
 - pdf-parse (data room PDF text extraction)
 - mammoth (docx text extraction)
 - node-cron (background sync every 15 min)
 - Attio REST API (https://api.attio.com/v2)
 - Outline MCP Server (self-hosted on AWS)
-- Harmonic API (company enrichment)
+- Harmonic API (company enrichment — api.harmonic.ai)
 
 ---
 
@@ -336,10 +380,10 @@ Phase 1: ✅ Scaffold + Prisma schema + DB migrations
 Phase 2: ✅ Pipeline UI (table + kanban views + Add Deal flow)
 Phase 3: 🔲 Attio two-way sync
 Phase 4: ✅ Lighthouse (Outline) sync — Notes tab live (search + read + write)
-Phase 5: 🔲 AI features
-Phase 6: 🔲 Data room
-Phase 7: 🔲 Harmonic enrichment
-Phase 8: 🔲 Background jobs + settings + PDF export
+Phase 5: ✅ AI features (process-transcript, enrich-notes, screen-company, push-screening-to-lighthouse, generate-dd-memo, analyze-deal, ask-dataroom)
+Phase 6: ✅ Data room — upload (PDF/DOCX/XLSX), text extraction, list, delete, download, Ask Data Room (streaming AI Q&A)
+Phase 7: ✅ Harmonic enrichment — live (enrich by domain/name, competitors, investors, re-enrich)
+Phase 8: ✅ Background jobs (daily 8AM Attio pull via node-cron + instrumentation.ts), Settings page (/settings), PDF export for DD Memo (@react-pdf/renderer)
 
 ## Known Issues
 [add as you go]
@@ -355,3 +399,18 @@ Phase 8: 🔲 Background jobs + settings + PDF export
   SSE stream — Next.js App Router patches fetch and buffers streaming responses.
 - 2026-02-25: search_documents returns markdown text, not JSON. Parse by splitting
   on "## N." section headers to extract document IDs and titles.
+- 2026-02-25: Notes tab replaced contentEditable+marked+turndown with TipTap v3.
+  BubbleMenu imports from @tiptap/react/menus (not @tiptap/react). Table is a
+  named export. tiptap-markdown storage accessed via double cast:
+  editor.storage as unknown as { markdown: MarkdownStorage }.
+  Add immediatelyRender: false to useEditor to suppress SSR hydration warning.
+- 2026-02-25: Harmonic API lookup is POST /companies?website_url=https://{domain}
+  (not GET, not website_domain). Returns a single object, not an array.
+  Headcount growth is at traction_metrics.headcount['180d_ago'].percent_change
+  (already in %, divide by 100 before storing). Competitor links use
+  console.harmonic.ai/dashboard/company/{numeric_id} where numeric_id is the
+  last segment of the entity_urn.
+- 2026-02-25: Prisma CLI path quirk — migrate dev run from project root creates
+  prisma/dev.db (correct). If run from inside prisma/ it creates prisma/prisma/dev.db
+  (wrong). Always run Prisma CLI from project root. After ALTER TABLE or prisma
+  generate, must restart Next.js dev server to flush the globalThis.prisma singleton.

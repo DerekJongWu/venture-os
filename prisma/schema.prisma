@@ -43,7 +43,12 @@ model Deal {
   last_funding_stage      String?
   last_funding_date       DateTime?
   headcount_growth_6m     Float?
+  harmonic_competitors    String?   // JSON: [{id,name,domain}]
+  harmonic_investors      String?   // JSON: [{id,name}]
   harmonic_enriched_at    DateTime?
+
+  // AI features
+  needs_enrichment        Boolean   @default(false) // true when new transcript needs Lighthouse enrichment
 
   // Sync state
   missing_in_attio        Boolean   @default(false)
@@ -87,7 +92,14 @@ model DataRoomFile {
   file_path      String   // /data/dataroom/{deal_id}/{filename}
   file_type      String   // "pdf" | "docx" | "xlsx" | "other"
   extracted_text String?
+  file_size      Int?     // bytes
   uploaded_at    DateTime @default(now())
+}
+
+model Settings {
+  key        String   @id
+  value      String
+  updated_at DateTime @updatedAt
 }
 
 model SyncLog {

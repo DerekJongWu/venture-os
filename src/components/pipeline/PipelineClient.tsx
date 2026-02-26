@@ -9,7 +9,8 @@ import { DealDrawer } from "@/components/pipeline/DealDrawer";
 import { AddDealModal } from "@/components/pipeline/AddDealModal";
 import { SyncStatus } from "@/components/SyncStatus";
 import type { DealWithArrays } from "@/lib/deal-utils";
-import { LayoutGrid, Table2, Plus } from "lucide-react";
+import { LayoutGrid, Table2, Plus, Settings } from "lucide-react";
+import Link from "next/link";
 
 interface Props {
   initialDeals: DealWithArrays[];
@@ -73,7 +74,16 @@ export function PipelineClient({ initialDeals }: Props) {
       {/* Navbar */}
       <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 shrink-0">
         <h1 className="text-xl font-semibold text-gray-900">Deal Pipeline</h1>
-        <SyncStatus onSyncComplete={handleSyncComplete} />
+        <div className="flex items-center gap-3">
+          <SyncStatus onSyncComplete={handleSyncComplete} />
+          <Link
+            href="/settings"
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+          >
+            <Settings size={15} />
+            Settings
+          </Link>
+        </div>
       </header>
 
       <div className="flex flex-col flex-1 overflow-hidden">

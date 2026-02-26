@@ -8,7 +8,7 @@
   }
 }
 
-/* Lighthouse notes markdown preview */
+/* ── Lighthouse / TipTap notes editor ──────────────────────────────────────── */
 .notes-markdown {
   @apply text-sm text-gray-800 leading-relaxed;
 }
@@ -43,7 +43,7 @@
   @apply bg-transparent p-0;
 }
 .notes-markdown a {
-  @apply text-blue-600 hover:underline;
+  @apply text-blue-600 hover:underline cursor-pointer;
 }
 .notes-markdown blockquote {
   @apply border-l-4 border-gray-300 pl-4 my-2 text-gray-600 italic;
@@ -54,12 +54,39 @@
 .notes-markdown th,
 .notes-markdown td {
   @apply border border-gray-200 px-3 py-1.5 text-left;
+  position: relative; /* required for .selectedCell overlay */
 }
 .notes-markdown th {
   @apply bg-gray-50 font-medium;
 }
 .notes-markdown hr {
   @apply my-4 border-gray-200;
+}
+
+/* Highlight mark (yellow) */
+.notes-markdown mark {
+  background-color: #fef08a;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* TipTap table: selected cell highlight */
+.notes-markdown .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(147, 197, 253, 0.35);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* TipTap placeholder */
+.notes-markdown p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #9ca3af;
+  pointer-events: none;
+  height: 0;
 }
 
 
