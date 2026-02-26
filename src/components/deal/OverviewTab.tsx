@@ -11,8 +11,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { X, ExternalLink } from "lucide-react";
+import { X, ExternalLink, RefreshCw, Upload } from "lucide-react";
 import {
   ALL_STATUSES,
   FUNNEL_OPTIONS,
@@ -26,14 +27,57 @@ import type { DealWithArrays } from "@/lib/deal-utils";
 interface Props {
   deal: DealWithArrays;
   onPatchDeal: (id: string, fields: Partial<DealWithArrays>) => Promise<void>;
+  onPushToAttio?: () => void;
+  onSyncFromAttio?: () => void;
+  pushing?: boolean;
+  syncing?: boolean;
 }
 
-export function OverviewTab({ deal, onPatchDeal }: Props) {
+export function OverviewTab({
+  deal,
+  onPatchDeal,
+  onPushToAttio,
+  onSyncFromAttio,
+  pushing = false,
+  syncing = false,
+}: Props) {
   const patch = (fields: Partial<DealWithArrays>) =>
     onPatchDeal(deal.id, fields);
 
   return (
     <div className="space-y-6">
+      {/* Attio sync */}
+      {(onPushToAttio ?? onSyncFromAttio) && (
+        <section className="flex items-center gap-2">
+          {onSyncFromAttio && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onSyncFromAttio}
+              disabled={syncing}
+              className="gap-1.5"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
+              Pull from Attio
+            </Button>
+          )}
+          {onPushToAttio && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onPushToAttio}
+              disabled={pushing}
+              className="gap-1.5"
+            >
+              <Upload className={`h-3.5 w-3.5 ${pushing ? "opacity-50" : ""}`} />
+              Push to Attio
+            </Button>
+          )}
+        </section>
+      )}
+
       {/* Status & Funnel */}
       <section className="grid grid-cols-2 gap-4">
         <SingleSelect
@@ -145,7 +189,7 @@ export function OverviewTab({ deal, onPatchDeal }: Props) {
 
       <Separator />
 
-      {/* Read-only */}
+      {/* Read-only & Attio sync */}
       <section className="space-y-3">
         <ReadOnlyField
           label="Lighthouse URL"

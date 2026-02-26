@@ -8,6 +8,60 @@
   }
 }
 
+/* Lighthouse notes markdown preview */
+.notes-markdown {
+  @apply text-sm text-gray-800 leading-relaxed;
+}
+.notes-markdown h1 {
+  @apply text-xl font-semibold mt-6 mb-2 first:mt-0 border-b border-gray-200 pb-1;
+}
+.notes-markdown h2 {
+  @apply text-lg font-semibold mt-5 mb-2;
+}
+.notes-markdown h3 {
+  @apply text-base font-semibold mt-4 mb-1.5;
+}
+.notes-markdown p {
+  @apply my-2;
+}
+.notes-markdown ul {
+  @apply list-disc pl-6 my-2 space-y-0.5;
+}
+.notes-markdown ol {
+  @apply list-decimal pl-6 my-2 space-y-0.5;
+}
+.notes-markdown li {
+  @apply my-0.5;
+}
+.notes-markdown code {
+  @apply bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded text-[0.9em] font-mono;
+}
+.notes-markdown pre {
+  @apply bg-gray-100 rounded-md p-3 my-2 overflow-x-auto text-[0.85em];
+}
+.notes-markdown pre code {
+  @apply bg-transparent p-0;
+}
+.notes-markdown a {
+  @apply text-blue-600 hover:underline;
+}
+.notes-markdown blockquote {
+  @apply border-l-4 border-gray-300 pl-4 my-2 text-gray-600 italic;
+}
+.notes-markdown table {
+  @apply w-full border-collapse my-3 text-sm;
+}
+.notes-markdown th,
+.notes-markdown td {
+  @apply border border-gray-200 px-3 py-1.5 text-left;
+}
+.notes-markdown th {
+  @apply bg-gray-50 font-medium;
+}
+.notes-markdown hr {
+  @apply my-4 border-gray-200;
+}
+
 
 
 @layer base {

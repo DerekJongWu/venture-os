@@ -96,7 +96,7 @@ export const THESIS_OPTIONS = [
   "DeepTech - Quantum",
   "DeepTech - Blockchain",
   "AI-First Vertical Software - BankTech",
-  "AI-First Vertical Software - Wealth/Asset/Capital Markets Tech",
+  "AI-First Vertical Software - Wealth, Asset & Capital Markets Tech",
   "AI-First Vertical Software - Insurtech",
   "AI-First Vertical Software - HealthTech",
   "AI-First Vertical Software - Other",

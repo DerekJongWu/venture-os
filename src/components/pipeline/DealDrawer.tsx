@@ -8,7 +8,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ExternalLink, RefreshCw, Upload } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { OverviewTab } from "@/components/deal/OverviewTab";
 import { NotesTab } from "@/components/deal/NotesTab";
@@ -107,24 +107,6 @@ export function DealDrawer({ deal, onClose, onPatchDeal, onSyncDeal }: Props) {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={handlePushToAttio}
-                    disabled={pushing}
-                    title="Push to Attio"
-                    className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-40 transition-colors"
-                  >
-                    <Upload className={`h-4 w-4 ${pushing ? "opacity-50" : ""}`} />
-                  </button>
-                  <button
-                    onClick={handleSync}
-                    disabled={syncing}
-                    title="Pull from Attio"
-                    className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition-colors"
-                  >
-                    <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
-                  </button>
-                </div>
               </div>
             </SheetHeader>
 
@@ -139,7 +121,14 @@ export function DealDrawer({ deal, onClose, onPatchDeal, onSyncDeal }: Props) {
 
               <div className="flex-1 overflow-y-auto">
                 <TabsContent value="overview" className="m-0 p-6">
-                  <OverviewTab deal={deal} onPatchDeal={onPatchDeal} />
+                  <OverviewTab
+                    deal={deal}
+                    onPatchDeal={onPatchDeal}
+                    onPushToAttio={handlePushToAttio}
+                    onSyncFromAttio={handleSync}
+                    pushing={pushing}
+                    syncing={syncing}
+                  />
                 </TabsContent>
                 <TabsContent value="notes" className="m-0 p-6">
                   <NotesTab deal={deal} />

@@ -67,7 +67,7 @@ Flagship, SMBC, Horizons, Horizons - Harbor
 ### Thesis Options (multiselect)
 DeepTech - AI Apps/Infra, DeepTech - Cyber/RiskTech, DeepTech - Quantum,
 DeepTech - Blockchain, AI-First Vertical Software - BankTech,
-AI-First Vertical Software - Wealth/Asset/Capital Markets Tech,
+AI-First Vertical Software - Wealth, Asset & Capital Markets Tech,
 AI-First Vertical Software - Insurtech, AI-First Vertical Software - HealthTech,
 AI-First Vertical Software - Other, Payments - Commerce,
 Payments - Value Added Services, Payments - CFO Tech,

@@ -318,7 +318,45 @@ export async function fetchDocument(docId: string): Promise<string> {
 }
 
 /**
+ * Pick the best-matching document when search returns multiple results.
+ * Prefers a document whose title equals (or closely matches) the company name,
+ * e.g. a doc titled "Nametag" for company "Nametag" over "DD Room Analysis"
+ * that only mentions Nametag in passing.
+ */
+function pickBestDocumentByCompanyName(
+  stubs: OutlineDocStub[],
+  companyName: string
+): OutlineDocStub {
+  const normalized = companyName.trim().toLowerCase();
+  if (!normalized) return stubs[0];
+
+  // Exact title match (case-insensitive)
+  const exact = stubs.find(
+    (s) => s.title.trim().toLowerCase() === normalized
+  );
+  if (exact) return exact;
+
+  // Title equals company name with minor punctuation/whitespace differences
+  const titleNorm = (t: string) => t.trim().toLowerCase().replace(/\s+/g, " ");
+  const companyNorm = titleNorm(companyName);
+  const startsWith = stubs.find(
+    (s) => titleNorm(s.title) === companyNorm || titleNorm(s.title).startsWith(companyNorm)
+  );
+  if (startsWith) return startsWith;
+
+  // Title contains company name (e.g. "Nametag - DD Notes")
+  const contains = stubs.find(
+    (s) => titleNorm(s.title).includes(companyNorm) || companyNorm.includes(titleNorm(s.title))
+  );
+  if (contains) return contains;
+
+  return stubs[0];
+}
+
+/**
  * Fetch document content by company name: search_documents → read_document.
+ * When multiple documents match, prefers one whose title matches the company name
+ * (e.g. "Nametag" doc for company "Nametag") over docs that only mention the company.
  * Returns content and documentId (so the client can use documentId for save).
  * Throws if no document is found for the company.
  */
@@ -333,9 +371,9 @@ export async function fetchDocumentByCompanyName(
     throw new Error(`No document found in Lighthouse for "${trimmed}"`);
   }
 
-  const documentId = stubs[0].id;
-  const content = await fetchDocument(documentId);
-  return { content, documentId };
+  const best = pickBestDocumentByCompanyName(stubs, trimmed);
+  const content = await fetchDocument(best.id);
+  return { content, documentId: best.id };
 }
 
 /**
