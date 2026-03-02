@@ -50,7 +50,7 @@ export function DealCard({ deal, onClick, onDelete }: Props) {
         </p>
         {deal.status && (
           <span
-            className={`shrink-0 text-xs font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${
+            className={`shrink-0 max-w-[9rem] overflow-hidden text-ellipsis whitespace-nowrap text-xs font-medium px-1.5 py-0.5 rounded-full ${
               STATUS_COLORS[deal.status] ?? "bg-gray-100 text-gray-600"
             }`}
           >
@@ -73,13 +73,6 @@ export function DealCard({ deal, onClick, onDelete }: Props) {
             </Badge>
           )}
         </div>
-      )}
-
-      {/* DD Lead */}
-      {deal.dd_lead.length > 0 && (
-        <p className="text-xs text-gray-500 mb-1">
-          {deal.dd_lead.map((e) => e.split("@")[0]).join(", ")}
-        </p>
       )}
 
       {/* Next steps (1 line) */}

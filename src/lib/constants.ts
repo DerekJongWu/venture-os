@@ -22,12 +22,18 @@ export type StatusValue = (typeof ALL_STATUSES)[number];
 // ─── Swim lane configuration ──────────────────────────────────────────────────
 export const SWIM_LANES = [
   {
-    id: "top_of_funnel",
-    label: "Top of Funnel",
+    id: "track",
+    label: "Track",
     statuses: [
       "Track",
       "Need Intro",
       "Outreach",
+    ],
+  },
+  {
+    id: "meetings",
+    label: "Meetings",
+    statuses: [
       "Initial Meetings",
       "Intro in Process",
     ],
@@ -44,12 +50,8 @@ export const SWIM_LANES = [
       "IC Review",
       "IC Voted - Pass/Track",
       "IC Approved / Legal - Funding Process",
+      "Portfolio",
     ],
-  },
-  {
-    id: "portfolio",
-    label: "Portfolio",
-    statuses: ["Portfolio"],
   },
   {
     id: "passed",
@@ -64,7 +66,7 @@ export function getLaneForStatus(status: string | null | undefined): LaneId {
   for (const lane of SWIM_LANES) {
     if (lane.statuses.includes(status as never)) return lane.id;
   }
-  return "top_of_funnel";
+  return "track";
 }
 
 export function getLane(id: LaneId) {
